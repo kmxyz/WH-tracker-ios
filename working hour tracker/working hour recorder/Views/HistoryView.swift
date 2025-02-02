@@ -13,6 +13,9 @@ struct HistoryView: View {
     @State private var showDatePicker = true
     @State private var scrollOffset: CGFloat = 0
     
+    // Cache calendar instance
+    private let calendar = Calendar.current
+    
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
@@ -25,12 +28,18 @@ struct HistoryView: View {
         if showAllData {
             return sessions
         }
+        
+        // Use cached calendar and compute date bounds once
+        let startOfDay = calendar.startOfDay(for: startDate)
+        let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
+        
         return sessions.filter { session in
-            let isInRange = (startDate...endDate).contains(session.startTime)
-            return isInRange
+            let sessionDate = session.startTime
+            return sessionDate >= startOfDay && sessionDate <= endOfDay
         }
     }
     
+    // Cache total hours calculation
     private var totalHoursInRange: Double {
         filteredSessions.reduce(0) { $0 + $1.totalHours }
     }
@@ -66,29 +75,35 @@ struct HistoryView: View {
                                     
                                     VStack(spacing: 16) {
                                         HStack {
+                                            Text("Start Date")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                                .frame(width: 80, alignment: .leading)
+                                            
                                             Image(systemName: "calendar")
                                                 .foregroundColor(.blue)
-                                            DatePicker("Start Date", selection: $startDate, in: ...endDate, displayedComponents: [.date])
+                                            DatePicker("", selection: $startDate, in: ...endDate, displayedComponents: [.date])
                                                 .datePickerStyle(.compact)
-                                                .labelsHidden()
+                                                .labelsHidden()                                                  
                                         }
-                                        .onChange(of: startDate) { oldValue, newValue in
-                                            withAnimation {
-                                                startDate = newValue
-                                            }
+                                        .onChange(of: startDate) { _, newValue in
+                                            startDate = newValue
                                         }
                                         
                                         HStack {
+                                            Text("End Date")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                                .frame(width: 80, alignment: .leading)
+                                            
                                             Image(systemName: "calendar")
                                                 .foregroundColor(.blue)
-                                            DatePicker("End Date", selection: $endDate, in: startDate..., displayedComponents: [.date])
+                                            DatePicker("", selection: $endDate, in: startDate..., displayedComponents: [.date])
                                                 .datePickerStyle(.compact)
                                                 .labelsHidden()
                                         }
-                                        .onChange(of: endDate) { oldValue, newValue in
-                                            withAnimation {
-                                                endDate = newValue
-                                            }
+                                        .onChange(of: endDate) { _, newValue in
+                                            endDate = newValue
                                         }
                                         
                                         // Quick Date Range Buttons
@@ -162,7 +177,8 @@ struct HistoryView: View {
                                     withAnimation {
                                         store.deleteSession(session)
                                     }
-                                }
+                                },
+                                store: store
                             )
                         }
                     }
@@ -244,7 +260,6 @@ struct HistoryView: View {
     }
     
     private func setDateRange(days: Int) {
-        let calendar = Calendar.current
         endDate = Date()
         startDate = calendar.date(byAdding: .day, value: days, to: endDate) ?? endDate
     }
@@ -267,22 +282,43 @@ struct SessionRow: View {
     @State private var offset: CGFloat = 0
     @State private var isSwiped = false
     @State private var showingDeleteAlert = false
+    @State private var showingEditSheet = false
+    @ObservedObject var store: WorkSessionStore
     
     var body: some View {
         ZStack(alignment: .trailing) {
             // Delete button background
-            Rectangle()
-                .foregroundColor(.red)
-                .frame(width: 80)
-                .overlay(
-                    Button {
-                        showingDeleteAlert = true
-                    } label: {
-                        Image(systemName: "trash")
-                            .foregroundColor(.white)
-                            .imageScale(.large)
-                    }
-                )
+            HStack(spacing: 0) {
+                Rectangle()
+                    .foregroundColor(.blue)
+                    .frame(width: 80)
+                    .overlay(
+                        Button {
+                            showingEditSheet = true
+                            withAnimation {
+                                offset = 0
+                                isSwiped = false
+                            }
+                        } label: {
+                            Image(systemName: "pencil")
+                                .foregroundColor(.white)
+                                .imageScale(.large)
+                        }
+                    )
+                
+                Rectangle()
+                    .foregroundColor(.red)
+                    .frame(width: 80)
+                    .overlay(
+                        Button {
+                            showingDeleteAlert = true
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundColor(.white)
+                                .imageScale(.large)
+                        }
+                    )
+            }
             
             // Main content
             VStack(alignment: .leading, spacing: 8) {
@@ -298,10 +334,23 @@ struct SessionRow: View {
                     VStack(alignment: .leading) {
                         Text(dateFormatter.string(from: session.startTime))
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.primary)
+                            .fontWeight(.medium)
                         Text(dateFormatter.string(from: session.endTime))
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.primary)
+                            .fontWeight(.medium)
+                        Text(session.locationString)
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                            .lineLimit(1)
+                        if !session.note.isEmpty {
+                            Text(session.note)
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .lineLimit(2)
+                                .padding(.top, 2)
+                        }
                     }
                     
                     Spacer()
@@ -309,6 +358,7 @@ struct SessionRow: View {
                     Text(String(format: "%.2f hrs", session.totalHours))
                         .font(.headline)
                         .foregroundColor(.blue)
+                        .fontWeight(.bold)
                 }
             }
             .padding()
@@ -316,17 +366,17 @@ struct SessionRow: View {
             .cornerRadius(10)
             .shadow(color: .gray.opacity(0.1), radius: 2, x: 0, y: 1)
             .offset(x: offset)
-            .gesture(
+            .simultaneousGesture(
                 DragGesture()
                     .onChanged { gesture in
                         if gesture.translation.width < 0 {
-                            offset = max(gesture.translation.width, -80)
+                            offset = max(gesture.translation.width, -160) // Updated to accommodate both buttons
                         }
                     }
                     .onEnded { gesture in
                         withAnimation {
                             if gesture.translation.width < -40 {
-                                offset = -80
+                                offset = -160 // Updated to accommodate both buttons
                                 isSwiped = true
                             } else {
                                 offset = 0
@@ -335,16 +385,25 @@ struct SessionRow: View {
                         }
                     }
             )
-            .onTapGesture {
-                if isSwiped {
-                    withAnimation {
-                        offset = 0
-                        isSwiped = false
+            .simultaneousGesture(
+                TapGesture()
+                    .onEnded {
+                        if isSwiped {
+                            withAnimation {
+                                offset = 0
+                                isSwiped = false
+                            }
+                        }
                     }
-                }
-            }
+            )
         }
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        .sheet(isPresented: $showingEditSheet) {
+            NavigationStack {
+                EditSessionView(session: session, store: store)
+            }
+            .presentationDetents([.medium])
+        }
         .alert("Delete Session", isPresented: $showingDeleteAlert) {
             Button("Delete", role: .destructive) {
                 withAnimation {
@@ -361,6 +420,92 @@ struct SessionRow: View {
             }
         } message: {
             Text("Are you sure you want to delete this work session?")
+        }
+    }
+}
+
+struct EditSessionView: View {
+    let session: WorkSession
+    @ObservedObject var store: WorkSessionStore
+    @State private var startTime: Date
+    @State private var endTime: Date
+    @State private var location: String
+    @State private var note: String
+    @Environment(\.dismiss) private var dismiss
+    
+    private let maxWords = 30
+    
+    private var wordCount: Int {
+        note.split(separator: " ").count
+    }
+    
+    private var isWordLimitReached: Bool {
+        wordCount >= maxWords
+    }
+    
+    init(session: WorkSession, store: WorkSessionStore) {
+        self.session = session
+        self.store = store
+        _startTime = State(initialValue: session.startTime)
+        _endTime = State(initialValue: session.endTime)
+        _location = State(initialValue: session.locationString)
+        _note = State(initialValue: session.note)
+    }
+    
+    var body: some View {
+        Form {
+            Section("Time") {
+                DatePicker("Start Time", selection: $startTime)
+                DatePicker("End Time", selection: $endTime, in: startTime...)
+            }
+            
+            Section("Location") {
+                TextField("Location", text: $location)
+            }
+            
+            Section {
+                TextField("Add notes here...", text: $note, axis: .vertical)
+                    .lineLimit(3...6)
+                    .onChange(of: note) { oldValue, newValue in
+                        let words = newValue.split(separator: " ")
+                        if words.count > maxWords {
+                            note = words.prefix(maxWords).joined(separator: " ")
+                        }
+                    }
+                
+                Text("\(wordCount)/\(maxWords) words")
+                    .font(.caption)
+                    .foregroundColor(isWordLimitReached ? .red : .secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            } header: {
+                Text("Notes")
+            } footer: {
+                Text("Maximum \(maxWords) words allowed")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .navigationTitle("Edit Session")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    store.updateSession(
+                        session,
+                        newStartTime: startTime,
+                        newEndTime: endTime,
+                        newLocation: location,
+                        newNote: note
+                    )
+                    dismiss()
+                }
+            }
         }
     }
 } 

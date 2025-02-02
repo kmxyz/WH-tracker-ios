@@ -1,12 +1,20 @@
 import SwiftUI
 
+struct InProgressSession: Codable {
+    let startTime: Date
+    let isWorking: Bool
+}
+
 class WorkSessionStore: ObservableObject {
     @Published var sessions: [WorkSession] = []
+    @Published var inProgressSession: InProgressSession?
     
     private let saveKey = "WorkSessions"
+    private let inProgressKey = "InProgressSession"
     
     init() {
         loadSessions()
+        loadInProgressSession()
         
         // Add observer for app state changes
         NotificationCenter.default.addObserver(
@@ -31,6 +39,46 @@ class WorkSessionStore: ObservableObject {
         saveSessions()
     }
     
+    func updateSession(_ session: WorkSession, newStartTime: Date, newEndTime: Date, newLocation: String, newNote: String) {
+        if let index = sessions.firstIndex(where: { $0.id == session.id }) {
+            let timeInterval = newEndTime.timeIntervalSince(newStartTime)
+            let newTotalHours = timeInterval / 3600
+            
+            let updatedSession = WorkSession(
+                id: session.id,
+                startTime: newStartTime,
+                endTime: newEndTime,
+                totalHours: newTotalHours,
+                locationString: newLocation,
+                latitude: session.latitude,
+                longitude: session.longitude,
+                note: newNote
+            )
+            
+            sessions[index] = updatedSession
+            saveSessions()
+        }
+    }
+    
+    func saveInProgressSession(startTime: Date, isWorking: Bool) {
+        let session = InProgressSession(startTime: startTime, isWorking: isWorking)
+        inProgressSession = session
+        
+        do {
+            let encoded = try JSONEncoder().encode(session)
+            UserDefaults.standard.set(encoded, forKey: inProgressKey)
+            UserDefaults.standard.synchronize()
+        } catch {
+            print("Error saving in-progress session: \(error.localizedDescription)")
+        }
+    }
+    
+    func clearInProgressSession() {
+        inProgressSession = nil
+        UserDefaults.standard.removeObject(forKey: inProgressKey)
+        UserDefaults.standard.synchronize()
+    }
+    
     @objc private func saveOnBackground() {
         saveSessions()
     }
@@ -39,7 +87,7 @@ class WorkSessionStore: ObservableObject {
         do {
             let encoded = try JSONEncoder().encode(sessions)
             UserDefaults.standard.set(encoded, forKey: saveKey)
-            UserDefaults.standard.synchronize() // Force immediate save
+            UserDefaults.standard.synchronize()
         } catch {
             print("Error saving sessions: \(error.localizedDescription)")
         }
@@ -52,7 +100,18 @@ class WorkSessionStore: ObservableObject {
             }
         } catch {
             print("Error loading sessions: \(error.localizedDescription)")
-            sessions = [] // Reset to empty array if loading fails
+            sessions = []
+        }
+    }
+    
+    private func loadInProgressSession() {
+        if let data = UserDefaults.standard.data(forKey: inProgressKey) {
+            do {
+                let session = try JSONDecoder().decode(InProgressSession.self, from: data)
+                inProgressSession = session
+            } catch {
+                print("Error loading in-progress session: \(error.localizedDescription)")
+            }
         }
     }
 } 

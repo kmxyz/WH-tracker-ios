@@ -1,7 +1,9 @@
 import SwiftUI
+import CoreLocation
 
 struct HomeView: View {
     @ObservedObject var workSessionStore: WorkSessionStore
+    @StateObject private var locationManager = LocationManager()
     @State private var isWorking = false
     @State private var startTime: Date?
     @State private var endTime: Date?
@@ -16,86 +18,140 @@ struct HomeView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 30) {
-                // Title and Icon
-                VStack {
-                    Image(systemName: "clock.badge.checkmark")
-                        .imageScale(.large)
-                        .font(.system(size: 60))
-                        .foregroundStyle(.blue)
-                        .symbolEffect(.bounce, options: .repeat(2), value: isWorking)
-                    Text("Working Hour Recorder")
-                        .font(.title)
-                        .fontWeight(.bold)
-                }
-                .padding(.top, 30)
-                
-                // Time Information Display
-                VStack(spacing: 20) {
-                    TimeInfoView(label: "Start Time", time: startTime, formatter: dateFormatter)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                        .opacity(startTime != nil ? 1 : 0)
-                        .animation(.spring(duration: 0.6), value: startTime)
-                    
-                    TimeInfoView(label: "End Time", time: endTime, formatter: dateFormatter)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                        .opacity(endTime != nil ? 1 : 0)
-                        .animation(.spring(duration: 0.6).delay(0.2), value: endTime)
-                    
-                    if let hours = totalHours {
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 25) {
+                        // Title and Icon
                         VStack(spacing: 8) {
-                            Text("Total Working Hours")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-                            Text(String(format: "%.2f", hours))
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundColor(.blue)
-                                .transition(.scale.combined(with: .opacity))
-                                .animation(.spring(duration: 0.6), value: hours)
-                            Text("hours")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                            Image(systemName: "clock.badge.checkmark")
+                                .imageScale(.large)
+                                .font(.system(size: 60))
+                                .foregroundStyle(.blue)
+                                .symbolEffect(.bounce, options: .repeat(2), value: isWorking)
+                            Text("Working Hour Recorder")
+                                .font(.title)
+                                .fontWeight(.bold)
                         }
-                        .padding(.vertical, 20)
-                        .padding(.horizontal, 30)
-                        .background(
-                            RoundedRectangle(cornerRadius: 15)
-                                .fill(Color.blue.opacity(0.1))
-                                .shadow(color: .blue.opacity(0.1), radius: 5, x: 0, y: 2)
-                        )
-                        .transition(.scale.combined(with: .opacity))
-                        .animation(.spring(duration: 0.8).delay(0.4), value: totalHours)
+                        .padding(.top, 30)
+                        
+                        // Time and Location Information
+                        VStack(spacing: 16) {
+                            // Start Time Card
+                            InfoCard(
+                                title: "Start Time",
+                                isVisible: startTime != nil
+                            ) {
+                                if let time = startTime {
+                                    Text(dateFormatter.string(from: time))
+                                        .font(.headline)
+                                }
+                            }
+                            
+                            // Location Card
+                            if isWorking || startTime != nil {
+                                InfoCard(
+                                    title: "Location",
+                                    isVisible: true
+                                ) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        if locationManager.permissionDenied {
+                                            HStack(spacing: 8) {
+                                                Text("Location access denied")
+                                                    .foregroundColor(.red)
+                                                Button {
+                                                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                                                        UIApplication.shared.open(url)
+                                                    }
+                                                } label: {
+                                                    Image(systemName: "gear")
+                                                        .foregroundColor(.blue)
+                                                }
+                                            }
+                                            Text("Tap the gear icon to open Settings")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        } else {
+                                            Text(locationManager.locationString)
+                                                .font(.headline)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // End Time Card
+                            InfoCard(
+                                title: "End Time",
+                                isVisible: endTime != nil
+                            ) {
+                                if let time = endTime {
+                                    Text(dateFormatter.string(from: time))
+                                        .font(.headline)
+                                }
+                            }
+                            
+                            // Total Hours Card
+                            if let hours = totalHours {
+                                InfoCard(
+                                    title: "Total Working Hours",
+                                    isVisible: true
+                                ) {
+                                    VStack(spacing: 4) {
+                                        Text(String(format: "%.2f", hours))
+                                            .font(.system(size: 36, weight: .bold))
+                                            .foregroundColor(.blue)
+                                        Text("hours")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+                
+                // Action Buttons in a fixed container
+                VStack {
+                    if !isWorking {
+                        Button(action: startWork) {
+                            ActionButtonView(title: "Start Work", systemImage: "play.circle.fill", color: .green)
+                        }
+                        .transition(.scale)
+                    } else {
+                        Button(action: finishWork) {
+                            ActionButtonView(title: "Finish Work", systemImage: "stop.circle.fill", color: .red)
+                        }
+                        .transition(.scale)
                     }
                 }
                 .padding()
-                
-                Spacer()
-                
-                // Action Buttons
-                if !isWorking {
-                    Button(action: startWork) {
-                        ActionButtonView(title: "Start Work", systemImage: "play.circle.fill", color: .green)
+                .background(Color.white)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                locationManager.requestPermission()
+                // Restore session state if exists
+                if let inProgress = workSessionStore.inProgressSession {
+                    startTime = inProgress.startTime
+                    isWorking = inProgress.isWorking
+                    if isWorking {
+                        locationManager.startUpdatingLocation()
                     }
-                    .transition(.scale)
-                } else {
-                    Button(action: finishWork) {
-                        ActionButtonView(title: "Finish Work", systemImage: "stop.circle.fill", color: .red)
-                    }
-                    .transition(.scale)
                 }
             }
-            .padding()
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
     
     private func startWork() {
+        let start = Date()
         withAnimation {
-            startTime = Date()
+            startTime = start
             endTime = nil
             totalHours = nil
             isWorking = true
         }
+        locationManager.startUpdatingLocation()
+        workSessionStore.saveInProgressSession(startTime: start, isWorking: true)
     }
     
     private func finishWork() {
@@ -107,14 +163,61 @@ struct HomeView: View {
         }
         
         if let start = startTime, let hours = totalHours {
-            let session = WorkSession(startTime: start, endTime: end, totalHours: hours)
+            let session = WorkSession(
+                startTime: start,
+                endTime: end,
+                totalHours: hours,
+                locationString: locationManager.locationString,
+                latitude: locationManager.location?.coordinate.latitude,
+                longitude: locationManager.location?.coordinate.longitude
+            )
             workSessionStore.addSession(session)
+            workSessionStore.clearInProgressSession()
         }
+        
+        locationManager.stopUpdatingLocation()
     }
     
     private func calculateTotalHours() {
         guard let start = startTime, let end = endTime else { return }
         let timeInterval = end.timeIntervalSince(start)
         totalHours = timeInterval / 3600
+    }
+}
+
+// Reusable Info Card View
+struct InfoCard<Content: View>: View {
+    let title: String
+    let isVisible: Bool
+    let content: () -> Content
+    
+    init(
+        title: String,
+        isVisible: Bool,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.title = title
+        self.isVisible = isVisible
+        self.content = content
+    }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.blue.opacity(0.1))
+        )
+        .opacity(isVisible ? 1 : 0)
+        .animation(.spring(duration: 0.6), value: isVisible)
     }
 } 
