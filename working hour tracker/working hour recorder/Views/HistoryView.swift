@@ -146,7 +146,7 @@ struct HistoryView: View {
                                 Text(showAllData ? "Total Hours (All Time)" : "Total Hours in Range")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
-                                Text(String(format: "%.2f hrs", totalHoursInRange))
+                                Text(String(format: "%.1f hrs", totalHoursInRange))
                                     .font(.title2)
                                     .fontWeight(.bold)
                                     .foregroundColor(.blue)
@@ -355,7 +355,7 @@ struct SessionRow: View {
                     
                     Spacer()
                     
-                    Text(String(format: "%.2f hrs", session.totalHours))
+                    Text(String(format: "%.1f hrs", session.totalHours))
                         .font(.headline)
                         .foregroundColor(.blue)
                         .fontWeight(.bold)
