@@ -125,9 +125,11 @@ struct HomeView: View {
                     }
                 }
                 .padding()
-                .background(Color.white)
+                .background(Color(UIColor.systemBackground))
+                .shadow(color: Color.primary.opacity(0.1), radius: 5)
             }
             .navigationBarTitleDisplayMode(.inline)
+            .background(Color(UIColor.systemBackground))
             .onAppear {
                 locationManager.requestPermission()
                 // Restore session state if exists
@@ -215,7 +217,8 @@ struct InfoCard<Content: View>: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.blue.opacity(0.1))
+                .fill(Color(UIColor.systemBackground))
+                .shadow(color: Color.primary.opacity(0.1), radius: 5)
         )
         .opacity(isVisible ? 1 : 0)
         .animation(.spring(duration: 0.6), value: isVisible)

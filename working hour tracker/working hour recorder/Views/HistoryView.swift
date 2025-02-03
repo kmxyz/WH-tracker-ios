@@ -114,7 +114,7 @@ struct HistoryView: View {
                                         }
                                     }
                                     .padding()
-                                    .background(Color.gray.opacity(0.1))
+                                    .background(Color(UIColor.secondarySystemBackground))
                                     .cornerRadius(10)
                                 }
                                 
@@ -153,7 +153,7 @@ struct HistoryView: View {
                             }
                         }
                         .padding()
-                        .background(Color.blue.opacity(0.1))
+                        .background(Color(UIColor.secondarySystemBackground))
                         .cornerRadius(10)
                     }
                     .padding()
@@ -362,7 +362,7 @@ struct SessionRow: View {
                 }
             }
             .padding()
-            .background(Color.white)
+            .background(Color(UIColor.systemBackground))
             .cornerRadius(10)
             .shadow(color: .gray.opacity(0.1), radius: 2, x: 0, y: 1)
             .offset(x: offset)
