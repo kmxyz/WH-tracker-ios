@@ -636,15 +636,18 @@ struct EditSessionView: View {
             Section("Company") {
                 TextField("Company Name", text: $companyName)
                     .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
             }
             
             Section("Location") {
                 TextField("Location", text: $location)
+                    .autocorrectionDisabled()
             }
             
             Section {
                 TextField("Add notes here...", text: $note, axis: .vertical)
                     .lineLimit(3...6)
+                    .autocorrectionDisabled()
                     .onChange(of: note) { oldValue, newValue in
                         let words = newValue.split(separator: " ")
                         if words.count > maxWords {
@@ -665,6 +668,7 @@ struct EditSessionView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        .formStyle(.grouped)
         .navigationTitle("Edit Session")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

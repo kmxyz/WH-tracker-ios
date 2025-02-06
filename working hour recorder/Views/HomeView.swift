@@ -46,7 +46,7 @@ struct HomeView: View {
                             ) {
                                 HStack {
                                     if companyName.isEmpty {
-                                        Text("Tap to add company name")
+                                        Text("Click to add company name")
                                             .foregroundColor(.secondary)
                                             .font(.headline)
                                     } else {
@@ -200,8 +200,10 @@ struct HomeView: View {
                         TextField("Company Name", text: $newCompanyName)
                             .textInputAutocapitalization(.words)
                             .submitLabel(.done)
+                            .autocorrectionDisabled()
                     }
                 }
+                .listStyle(.insetGrouped)
                 .navigationTitle("Select Company")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
