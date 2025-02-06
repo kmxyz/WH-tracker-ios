@@ -8,6 +8,8 @@ struct HomeView: View {
     @State private var startTime: Date?
     @State private var endTime: Date?
     @State private var totalHours: Double?
+    @State private var companyName: String = ""
+    @State private var showingCompanyInput = false
     
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -36,6 +38,29 @@ struct HomeView: View {
                         
                         // Time and Location Information
                         VStack(spacing: 16) {
+                            // Company Name Card
+                            InfoCard(
+                                title: "Company",
+                                isVisible: true
+                            ) {
+                                HStack {
+                                    if companyName.isEmpty {
+                                        Text("Tap to add company name")
+                                            .foregroundColor(.secondary)
+                                            .font(.headline)
+                                    } else {
+                                        Text(companyName)
+                                            .font(.headline)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "building.2")
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                            .onTapGesture {
+                                showingCompanyInput = true
+                            }
+                            
                             // Start Time Card
                             InfoCard(
                                 title: "Start Time",
@@ -142,6 +167,31 @@ struct HomeView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingCompanyInput) {
+            NavigationStack {
+                Form {
+                    Section("Company Information") {
+                        TextField("Company Name", text: $companyName)
+                            .textInputAutocapitalization(.words)
+                    }
+                }
+                .navigationTitle("Enter Company Name")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            showingCompanyInput = false
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            showingCompanyInput = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.height(200)])
+        }
     }
     
     private func startWork() {
@@ -171,7 +221,8 @@ struct HomeView: View {
                 totalHours: hours,
                 locationString: locationManager.locationString,
                 latitude: locationManager.location?.coordinate.latitude,
-                longitude: locationManager.location?.coordinate.longitude
+                longitude: locationManager.location?.coordinate.longitude,
+                companyName: companyName
             )
             workSessionStore.addSession(session)
             workSessionStore.clearInProgressSession()

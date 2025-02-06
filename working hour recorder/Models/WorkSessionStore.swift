@@ -39,7 +39,7 @@ class WorkSessionStore: ObservableObject {
         saveSessions()
     }
     
-    func updateSession(_ session: WorkSession, newStartTime: Date, newEndTime: Date, newLocation: String, newNote: String) {
+    func updateSession(_ session: WorkSession, newStartTime: Date, newEndTime: Date, newLocation: String, newNote: String, newCompanyName: String) {
         if let index = sessions.firstIndex(where: { $0.id == session.id }) {
             let timeInterval = newEndTime.timeIntervalSince(newStartTime)
             let newTotalHours = timeInterval / 3600
@@ -52,7 +52,8 @@ class WorkSessionStore: ObservableObject {
                 locationString: newLocation,
                 latitude: session.latitude,
                 longitude: session.longitude,
-                note: newNote
+                note: newNote,
+                companyName: newCompanyName
             )
             
             sessions[index] = updatedSession

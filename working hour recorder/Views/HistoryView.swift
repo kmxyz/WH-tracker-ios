@@ -285,6 +285,24 @@ struct SessionRow: View {
     @State private var showingEditSheet = false
     @ObservedObject var store: WorkSessionStore
     
+    private let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter
+    }()
+    
+    private let dateOnlyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .none
+        formatter.dateStyle = .medium
+        return formatter
+    }()
+    
+    private var isSameDay: Bool {
+        Calendar.current.isDate(session.startTime, inSameDayAs: session.endTime)
+    }
+    
     var body: some View {
         ZStack(alignment: .trailing) {
             // Delete button background
@@ -331,18 +349,39 @@ struct SessionRow: View {
                             }
                     }
                     
-                    VStack(alignment: .leading) {
-                        Text(dateFormatter.string(from: session.startTime))
+                    VStack(alignment: .leading, spacing: 4) {
+                        if isSameDay {
+                            Text(dateOnlyFormatter.string(from: session.startTime))
+                                .font(.subheadline)
+                                .foregroundColor(.primary)
+                                .fontWeight(.medium)
+                            HStack(spacing: 8) {
+                                Text(timeFormatter.string(from: session.startTime))
+                                Text("→")
+                                Text(timeFormatter.string(from: session.endTime))
+                            }
                             .font(.subheadline)
-                            .foregroundColor(.primary)
-                            .fontWeight(.medium)
-                        Text(dateFormatter.string(from: session.endTime))
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
-                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                        } else {
+                            Text(dateFormatter.string(from: session.startTime))
+                                .font(.subheadline)
+                                .foregroundColor(.primary)
+                                .fontWeight(.medium)
+                            Text(dateFormatter.string(from: session.endTime))
+                                .font(.subheadline)
+                                .foregroundColor(.primary)
+                                .fontWeight(.medium)
+                        }
+                        
+                        if !session.companyName.isEmpty {
+                            Text(session.companyName)
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                                .lineLimit(1)
+                        }
                         Text(session.locationString)
                             .font(.caption)
-                            .foregroundColor(.blue)
+                            .foregroundColor(.secondary)
                             .lineLimit(1)
                         if !session.note.isEmpty {
                             Text(session.note)
@@ -431,6 +470,7 @@ struct EditSessionView: View {
     @State private var endTime: Date
     @State private var location: String
     @State private var note: String
+    @State private var companyName: String
     @Environment(\.dismiss) private var dismiss
     
     private let maxWords = 30
@@ -450,6 +490,7 @@ struct EditSessionView: View {
         _endTime = State(initialValue: session.endTime)
         _location = State(initialValue: session.locationString)
         _note = State(initialValue: session.note)
+        _companyName = State(initialValue: session.companyName)
     }
     
     var body: some View {
@@ -457,6 +498,11 @@ struct EditSessionView: View {
             Section("Time") {
                 DatePicker("Start Time", selection: $startTime)
                 DatePicker("End Time", selection: $endTime, in: startTime...)
+            }
+            
+            Section("Company") {
+                TextField("Company Name", text: $companyName)
+                    .textInputAutocapitalization(.words)
             }
             
             Section("Location") {
@@ -501,7 +547,8 @@ struct EditSessionView: View {
                         newStartTime: startTime,
                         newEndTime: endTime,
                         newLocation: location,
-                        newNote: note
+                        newNote: note,
+                        newCompanyName: companyName
                     )
                     dismiss()
                 }

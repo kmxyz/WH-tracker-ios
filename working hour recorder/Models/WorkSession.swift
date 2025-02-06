@@ -10,8 +10,9 @@ struct WorkSession: Identifiable, Codable {
     let latitude: Double?
     let longitude: Double?
     let note: String
+    let companyName: String
     
-    init(id: UUID = UUID(), startTime: Date, endTime: Date, totalHours: Double, locationString: String = "Location not available", latitude: Double? = nil, longitude: Double? = nil, note: String = "") {
+    init(id: UUID = UUID(), startTime: Date, endTime: Date, totalHours: Double, locationString: String = "Location not available", latitude: Double? = nil, longitude: Double? = nil, note: String = "", companyName: String = "") {
         self.id = id
         self.startTime = startTime
         self.endTime = endTime
@@ -20,5 +21,6 @@ struct WorkSession: Identifiable, Codable {
         self.latitude = latitude
         self.longitude = longitude
         self.note = note
+        self.companyName = companyName
     }
 } 
