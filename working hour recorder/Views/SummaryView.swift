@@ -4,11 +4,31 @@ import Charts
 struct SummaryView: View {
     @ObservedObject var store: WorkSessionStore
     @State private var selectedPeriod: TimePeriod = .weekly
+    @State private var selectedCompany: String? = nil
     
     enum TimePeriod: String, CaseIterable {
         case weekly = "Weekly"
         case biWeekly = "Bi-Weekly"
         case monthly = "Monthly"
+    }
+    
+    private var filteredSessions: [WorkSession] {
+        if let company = selectedCompany {
+            if company == "Other" {
+                return store.sessions.filter { $0.companyName.isEmpty }
+            } else {
+                return store.sessions.filter { $0.companyName == company }
+            }
+        }
+        return store.sessions
+    }
+    
+    private var uniqueCompanies: [String] {
+        var companies = Set(store.sessions.map { $0.companyName }).filter { !$0.isEmpty }
+        if store.sessions.contains(where: { $0.companyName.isEmpty }) {
+            companies.insert("Other")
+        }
+        return Array(companies).sorted()
     }
     
     private var weeklyData: [(weekday: Int, hours: Double)] {
@@ -18,7 +38,7 @@ struct SummaryView: View {
         
         var dailyHours = Array(repeating: 0.0, count: 7)
         
-        for session in store.sessions {
+        for session in filteredSessions {
             if let days = calendar.dateComponents([.day], from: weekStart, to: session.startTime).day,
                days >= 0 && days < 7 {
                 let weekday = calendar.component(.weekday, from: session.startTime) - 1
@@ -33,16 +53,15 @@ struct SummaryView: View {
         let calendar = Calendar.current
         let now = Date()
         
-        // Find the most recent Saturday
-        let components = calendar.dateComponents([.weekday], from: now)
-        let daysToSubtract = ((components.weekday ?? 1) - calendar.firstWeekday + 7) % 7
-        let mostRecentSaturday = calendar.date(byAdding: .day, value: -daysToSubtract, to: now)!
+        // Get the start of today
+        let startOfToday = calendar.startOfDay(for: now)
+        // Go back 13 days to get full 2 weeks
+        let twoWeeksAgo = calendar.date(byAdding: .day, value: -13, to: startOfToday)!
         
-        // Go back one more week to get two weeks of data
-        let twoWeeksAgo = calendar.date(byAdding: .day, value: -13, to: mostRecentSaturday)!
         var dailyHours = Array(repeating: 0.0, count: 14)
         
-        for session in store.sessions {
+        for session in filteredSessions {
+            // Check if session is within the last 14 days
             if session.startTime >= twoWeeksAgo && session.startTime <= now {
                 if let days = calendar.dateComponents([.day], from: twoWeeksAgo, to: session.startTime).day,
                    days >= 0 && days < 14 {
@@ -62,7 +81,7 @@ struct SummaryView: View {
         
         var dailyHours = Array(repeating: 0.0, count: daysInMonth)
         
-        for session in store.sessions {
+        for session in filteredSessions {
             if calendar.isDate(session.startTime, equalTo: monthStart, toGranularity: .month) {
                 let day = calendar.component(.day, from: session.startTime) - 1
                 dailyHours[day] += session.totalHours
@@ -104,14 +123,66 @@ struct SummaryView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack {
+                VStack(spacing: 16) {
+                    // Company Filter
+                    Menu {
+                        Button(action: {
+                            selectedCompany = nil
+                        }) {
+                            HStack {
+                                Text("All Companies")
+                                if selectedCompany == nil {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        
+                        if !uniqueCompanies.isEmpty {
+                            Divider()
+                            
+                            ForEach(uniqueCompanies, id: \.self) { company in
+                                Button(action: {
+                                    selectedCompany = company
+                                }) {
+                                    HStack {
+                                        if company == "Other" {
+                                            Text("No Company")
+                                        } else {
+                                            Text(company)
+                                        }
+                                        if selectedCompany == company {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "building.2")
+                                .foregroundStyle(.blue)
+                            Text(selectedCompany.map { $0 == "Other" ? "No Company" : $0 } ?? "All Companies")
+                                .foregroundStyle(.primary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .foregroundStyle(.secondary)
+                                .imageScale(.small)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(UIColor.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    
+                    // Time Period Picker
                     Picker("Time Period", selection: $selectedPeriod) {
                         ForEach(TimePeriod.allCases, id: \.self) { period in
                             Text(period.rawValue).tag(period)
                         }
                     }
                     .pickerStyle(.segmented)
-                    .padding()
+                    .padding(.horizontal)
                     
                     switch selectedPeriod {
                     case .weekly:
@@ -137,7 +208,7 @@ struct SummaryView: View {
                         
                         let stats = calculateStats(for: weeklyData.map { ($0.weekday, $0.hours) })
                         SummaryStatsView(
-                            period: "This Week",
+                            period: selectedCompany.map { $0 == "Other" ? "This Week (No Company)" : "This Week (\($0))" } ?? "This Week",
                             totalHours: stats.total,
                             averageHoursPerDay: stats.average,
                             numberOfWorkDays: stats.days,
@@ -179,7 +250,7 @@ struct SummaryView: View {
                         
                         let stats = calculateStats(for: biWeeklyData.map { ($0.day, $0.hours) })
                         SummaryStatsView(
-                            period: "Last 2 Weeks",
+                            period: selectedCompany.map { $0 == "Other" ? "Last 2 Weeks (No Company)" : "Last 2 Weeks (\($0))" } ?? "Last 2 Weeks",
                             totalHours: stats.total,
                             averageHoursPerDay: stats.average,
                             numberOfWorkDays: stats.days,
@@ -221,7 +292,7 @@ struct SummaryView: View {
                         
                         let stats = calculateStats(for: monthlyData.map { ($0.day, $0.hours) })
                         SummaryStatsView(
-                            period: "This Month",
+                            period: selectedCompany.map { $0 == "Other" ? "This Month (No Company)" : "This Month (\($0))" } ?? "This Month",
                             totalHours: stats.total,
                             averageHoursPerDay: stats.average,
                             numberOfWorkDays: stats.days,

@@ -8,13 +8,16 @@ struct InProgressSession: Codable {
 class WorkSessionStore: ObservableObject {
     @Published var sessions: [WorkSession] = []
     @Published var inProgressSession: InProgressSession?
+    @Published var savedCompanyNames: [String] = []
     
     private let saveKey = "WorkSessions"
     private let inProgressKey = "InProgressSession"
+    private let companiesKey = "SavedCompanyNames"
     
     init() {
         loadSessions()
         loadInProgressSession()
+        loadSavedCompanyNames()
         
         // Add observer for app state changes
         NotificationCenter.default.addObserver(
@@ -80,6 +83,18 @@ class WorkSessionStore: ObservableObject {
         UserDefaults.standard.synchronize()
     }
     
+    func addCompanyName(_ name: String) {
+        if !name.isEmpty && !savedCompanyNames.contains(name) {
+            savedCompanyNames.append(name)
+            saveSavedCompanyNames()
+        }
+    }
+    
+    func removeCompanyName(_ name: String) {
+        savedCompanyNames.removeAll { $0 == name }
+        saveSavedCompanyNames()
+    }
+    
     @objc private func saveOnBackground() {
         saveSessions()
     }
@@ -114,5 +129,16 @@ class WorkSessionStore: ObservableObject {
                 print("Error loading in-progress session: \(error.localizedDescription)")
             }
         }
+    }
+    
+    private func loadSavedCompanyNames() {
+        if let companies = UserDefaults.standard.stringArray(forKey: companiesKey) {
+            savedCompanyNames = companies
+        }
+    }
+    
+    private func saveSavedCompanyNames() {
+        UserDefaults.standard.set(savedCompanyNames, forKey: companiesKey)
+        UserDefaults.standard.synchronize()
     }
 } 

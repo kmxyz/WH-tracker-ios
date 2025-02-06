@@ -12,6 +12,8 @@ struct HistoryView: View {
     @State private var showAllData = true
     @State private var showDatePicker = true
     @State private var scrollOffset: CGFloat = 0
+    @State private var selectedCompany: String? = nil
+    @State private var showingDeleteAllAlert = false
     
     // Cache calendar instance
     private let calendar = Calendar.current
@@ -24,19 +26,38 @@ struct HistoryView: View {
     }()
     
     private var filteredSessions: [WorkSession] {
-        let sessions = store.sessions.sorted(by: { $0.startTime > $1.startTime })
-        if showAllData {
-            return sessions
+        var sessions = store.sessions.sorted(by: { $0.startTime > $1.startTime })
+        
+        // First filter by company if selected
+        if let company = selectedCompany {
+            if company == "Other" {
+                sessions = sessions.filter { $0.companyName.isEmpty }
+            } else {
+                sessions = sessions.filter { $0.companyName == company }
+            }
         }
         
-        // Use cached calendar and compute date bounds once
-        let startOfDay = calendar.startOfDay(for: startDate)
-        let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
-        
-        return sessions.filter { session in
-            let sessionDate = session.startTime
-            return sessionDate >= startOfDay && sessionDate <= endOfDay
+        // Then filter by date if needed
+        if !showAllData {
+            let startOfDay = calendar.startOfDay(for: startDate)
+            let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
+            
+            sessions = sessions.filter { session in
+                let sessionDate = session.startTime
+                return sessionDate >= startOfDay && sessionDate <= endOfDay
+            }
         }
+        
+        return sessions
+    }
+    
+    private var uniqueCompanies: [String] {
+        var companies = Set(store.sessions.map { $0.companyName }).filter { !$0.isEmpty }
+        // Check if there are any sessions without company names
+        if store.sessions.contains(where: { $0.companyName.isEmpty }) {
+            companies.insert("Other")
+        }
+        return Array(companies).sorted()
     }
     
     // Cache total hours calculation
@@ -48,6 +69,60 @@ struct HistoryView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
+                    // Company Selection
+                    VStack(spacing: 16) {
+                        Menu {
+                            Button(action: {
+                                selectedCompany = nil
+                            }) {
+                                HStack {
+                                    Text("All Companies")
+                                    if selectedCompany == nil {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                            
+                            if !uniqueCompanies.isEmpty {
+                                Divider()
+                                
+                                ForEach(uniqueCompanies, id: \.self) { company in
+                                    Button(action: {
+                                        selectedCompany = company
+                                    }) {
+                                        HStack {
+                                            if company == "Other" {
+                                                Text("No Company")
+                                            } else {
+                                                Text(company)
+                                            }
+                                            if selectedCompany == company {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "building.2")
+                                    .foregroundStyle(.blue)
+                                Text(selectedCompany.map { $0 == "Other" ? "No Company" : $0 } ?? "All Companies")
+                                    .foregroundStyle(.primary)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .foregroundStyle(.secondary)
+                                    .imageScale(.small)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(UIColor.secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                    }
+                    .padding(.top)
+                    
                     // View Mode Selection
                     VStack(spacing: 16) {
                         Picker("View Mode", selection: $showAllData) {
@@ -143,7 +218,8 @@ struct HistoryView: View {
                             Spacer()
                             // Total hours second
                             VStack(alignment: .trailing, spacing: 4) {
-                                Text(showAllData ? "Total Hours (All Time)" : "Total Hours in Range")
+                                Text(selectedCompany.map { "Total Hours (\($0))" } ?? 
+                                    (showAllData ? "Total Hours (All Time)" : "Total Hours in Range"))
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                 Text(String(format: "%.1f hrs", totalHoursInRange))
@@ -208,15 +284,27 @@ struct HistoryView: View {
                 
                 ToolbarItem(placement: .topBarTrailing) {
                     if editMode == .active {
-                        Button(role: .destructive) {
+                        Menu {
                             if !selectedSessions.isEmpty {
-                                showingMultiDeleteAlert = true
+                                Button(role: .destructive) {
+                                    showingMultiDeleteAlert = true
+                                } label: {
+                                    Label("Delete Selected (\(selectedSessions.count))", systemImage: "checkmark.circle.fill")
+                                }
+                            }
+                            
+                            if !filteredSessions.isEmpty {
+                                Button(role: .destructive) {
+                                    showingDeleteAllAlert = true
+                                } label: {
+                                    Label(getDeleteAllButtonLabel(), systemImage: "trash.fill")
+                                }
                             }
                         } label: {
-                            Text("Delete (\(selectedSessions.count))")
+                            Image(systemName: "trash")
                                 .foregroundColor(.red)
                         }
-                        .disabled(selectedSessions.isEmpty)
+                        .disabled(selectedSessions.isEmpty && filteredSessions.isEmpty)
                     }
                 }
             }
@@ -242,6 +330,15 @@ struct HistoryView: View {
         } message: {
             Text("Are you sure you want to delete these \(selectedSessions.count) sessions? This action cannot be undone.")
         }
+        // Delete all filtered sessions alert
+        .alert("Delete All Filtered Sessions", isPresented: $showingDeleteAllAlert) {
+            Button("Delete \(filteredSessions.count) Sessions", role: .destructive) {
+                deleteAllFilteredSessions()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(deleteAllConfirmationMessage)
+        }
     }
     
     private func deleteSelectedSessions() {
@@ -262,6 +359,42 @@ struct HistoryView: View {
     private func setDateRange(days: Int) {
         endDate = Date()
         startDate = calendar.date(byAdding: .day, value: days, to: endDate) ?? endDate
+    }
+    
+    private var deleteAllConfirmationMessage: String {
+        var message = "Are you sure you want to delete"
+        if let company = selectedCompany {
+            message += " all sessions for \(company == "Other" ? "sessions without company" : "company '\(company)'")"
+        } else {
+            message += " all sessions"
+        }
+        if !showAllData {
+            message += " in the selected date range"
+        }
+        message += "? This action cannot be undone."
+        return message
+    }
+    
+    private func deleteAllFilteredSessions() {
+        for session in filteredSessions {
+            store.deleteSession(session)
+        }
+        selectedSessions.removeAll()
+        editMode = .inactive
+    }
+    
+    private func getDeleteAllButtonLabel() -> String {
+        if let company = selectedCompany {
+            if company == "Other" {
+                return "Delete All Without Company (\(filteredSessions.count))"
+            } else {
+                return "Delete All for '\(company)' (\(filteredSessions.count))"
+            }
+        } else if !showAllData {
+            return "Delete All in Date Range (\(filteredSessions.count))"
+        } else {
+            return "Delete All Records (\(filteredSessions.count))"
+        }
     }
 }
 
@@ -381,7 +514,7 @@ struct SessionRow: View {
                         }
                         Text(session.locationString)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(UIColor.systemGreen))
                             .lineLimit(1)
                         if !session.note.isEmpty {
                             Text(session.note)

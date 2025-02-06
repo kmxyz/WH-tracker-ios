@@ -9,6 +9,7 @@ struct HomeView: View {
     @State private var endTime: Date?
     @State private var totalHours: Double?
     @State private var companyName: String = ""
+    @State private var newCompanyName: String = ""
     @State private var showingCompanyInput = false
     
     private let dateFormatter: DateFormatter = {
@@ -169,28 +170,60 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showingCompanyInput) {
             NavigationStack {
-                Form {
-                    Section("Company Information") {
-                        TextField("Company Name", text: $companyName)
+                List {
+                    Section("Companies") {
+                        ForEach(workSessionStore.savedCompanyNames, id: \.self) { name in
+                            Button(action: {
+                                companyName = name
+                                showingCompanyInput = false
+                            }) {
+                                HStack {
+                                    Text(name)
+                                    Spacer()
+                                    if name == companyName {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
+                            .foregroundColor(.primary)
+                        }
+                        .onDelete { indexSet in
+                            indexSet.forEach { index in
+                                let name = workSessionStore.savedCompanyNames[index]
+                                workSessionStore.removeCompanyName(name)
+                            }
+                        }
+                    }
+                    
+                    Section("Add New Company") {
+                        TextField("Company Name", text: $newCompanyName)
                             .textInputAutocapitalization(.words)
+                            .submitLabel(.done)
                     }
                 }
-                .navigationTitle("Enter Company Name")
+                .navigationTitle("Select Company")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") {
+                            newCompanyName = ""
                             showingCompanyInput = false
                         }
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") {
+                            if !newCompanyName.isEmpty {
+                                companyName = newCompanyName
+                                workSessionStore.addCompanyName(newCompanyName)
+                                newCompanyName = ""
+                            }
                             showingCompanyInput = false
                         }
                     }
                 }
             }
-            .presentationDetents([.height(200)])
+            .presentationDetents([.medium])
         }
     }
     
