@@ -635,8 +635,9 @@ struct EditSessionView: View {
             
             Section("Company") {
                 TextField("Company Name", text: $companyName)
-                    .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
+                    .textInputAutocapitalization(.words)
+                    
             }
             
             Section("Location") {
